@@ -39,9 +39,9 @@ def main():
 
     # get a dataset to train on. In this example we generate images of a "U" that get rotated by multiples of 90 degrees
     # this here is only for demonstration purposes and the user is encouraged to use their own dataset
-    observations, actions = get_a_generated_dataset(grid_size=grid_size, nbr_samples=100, nbr_steps=1)
+    observations, actions = get_a_generated_dataset(grid_size=grid_size, nbr_samples=500, nbr_steps=1)
     dataset = torch.utils.data.TensorDataset(torch.from_numpy(observations), torch.from_numpy(actions))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=32, shuffle=True)
 
     # to create the HAE, we need 3 ingredients:
     #   1. an encoder that maps the input image to a latent representation
@@ -52,15 +52,16 @@ def main():
         nbr_channels_start=1, kernel_sizes=[3, 3], channels=[16, 32], strides=[1, 1],  # these values parametrize the conv layers
         dense_widths=[4*4*32, 128, latent_dim]  # these values parametrize the dense layers after the conv layers
     )
-    summary(encoder, (1, grid_size, grid_size))  # print a summary of the encoder to the command line
+    summary(encoder, (1, grid_size, grid_size), device='cpu')  # print a summary of the encoder to the command line
     decoder = SmallConvDecoder(
         kernel_sizes=[3, 3, 1], channels=[16, 16, 1], strides=[1, 1, 1],  # these values parametrize the transpose conv layers
         dense_widths=[latent_dim, 128, 4*4*32],  # these values parametrize the dense layers before the transpose conv layers
         shape_after_dense=(32, 4, 4),  # this shape is used to reshape the output of the dense layers before the transpose conv layers
         remove_channel_at_end=True  # this is used to remove the channel dimension at the end of the decoder
     )
-    summary(decoder, (latent_dim,))  # print a summary of the decoder to the command line
+    summary(decoder, (latent_dim,), device='cpu')  # print a summary of the decoder to the command line
     phi = SmallDensePhi([1, 32, 32, 4])
+    summary(phi, (1,), device='cpu')  # print a summary of phi to the command line
 
     hae = HomomorphismAutoencoder(
         encoder, decoder, phi,
