@@ -66,6 +66,8 @@ def get_move_rotation_u_dataset(
         u_side_length: int, grid_side_length: int, nbr_steps: int, nbr_samples: int
 ) -> Tuple[np.ndarray, np.ndarray]:
     assert u_side_length > 0 and u_side_length % 3 == 0
+    assert False, "Not implemented yet"
+    # todo: complete implementation
 
     block_size = u_side_length // 3
     u_0_deg = np.zeros((u_side_length, u_side_length), dtype=np.float32)

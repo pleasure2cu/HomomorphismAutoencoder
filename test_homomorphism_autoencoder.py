@@ -4,7 +4,7 @@ from unittest import TestCase
 import numpy as np
 import torch
 
-from homomorphism_autoencoder import HomomorphismAutoencoder, latent_prediction_loss, reconstruction_loss, hae_loss
+from homomorphism_autoencoder import HomomorphismAutoencoder, hae_loss
 
 
 def _sample_after_phi_1() -> torch.Tensor:
@@ -146,151 +146,62 @@ class TestHomomorphismAutoencoder(TestCase):
             torch.isclose(reconstructed_observations, torch.from_numpy(expected_reconstructed_observations)).all()
         )
 
-    def test_forward_1_t_skip_default(self):
-        hae = HomomorphismAutoencoder(_get_dummy_encoder_1(), _get_dummy_decoder_1(), _get_dummy_phi_1(), (15, 15),
-                                      (15, 15), 10, [3, 1, 2])
-        observations = torch.ones((3, 2, 15, 15), dtype=torch.float)
+    def test_forward_1(self):
+        hae = HomomorphismAutoencoder(
+            _get_dummy_encoder_1(), _get_dummy_decoder_1(), _get_dummy_phi_1(), (15, 15), (15, 15), 10, [3, 1, 2]
+        )
+        observations = torch.ones((3, 3, 15, 15), dtype=torch.float)
         observations[1, 1, 6, 7] = 25.
         actions = torch.mul(4., _sample_after_phi_1())
         actions = actions.view(3, 2, 14)
         for i in range(3):
             actions[i, :, :] = torch.mul(1. / 2. ** (4 + i), actions[i, :, :])
-        latent_observations, rho, zero_step_recon, one_step_latent, one_step_recon = hae(observations, actions)
-        expected_latent_observations = np.array([
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]],
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96]],
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]]
+        # latent_observations, rho, zero_step_recon, one_step_latent, one_step_recon = hae(observations, actions)
+        latents, rho, predicted_latents, predicted_observations = hae(observations, actions)
+        expected_latents = np.array([
+            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]],
+            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]],
+            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]]
         ], dtype=np.float32)
-        expected_0_step_recon = np.ones((3, 2, 15, 15), dtype=np.float32) * 90. / 25.
-        expected_0_step_recon[1, 1] = np.ones((15, 15), dtype=np.float32) * 99.6 / 25.
-        self.assertTrue(torch.isclose(latent_observations, torch.from_numpy(expected_latent_observations)).all())
-        self.assertTrue(torch.isclose(zero_step_recon, torch.from_numpy(expected_0_step_recon)).all())
+        self.assertTrue(torch.isclose(latents, torch.from_numpy(expected_latents)).all())
         self.assertEqual(rho.shape, (3, 2, 10, 10))
-        self.assertEqual(one_step_latent.shape, (3, 2, 10))
-        self.assertEqual(one_step_recon.shape, (3, 2, 15, 15))
+        self.assertEqual(predicted_latents.shape, (3, 3, 10))
+        self.assertEqual(predicted_observations.shape, (3, 3, 15, 15))
 
         recon_layer = np.ones((15 * 15, 10), dtype=np.float32) / 25.
         for batch_index in range(3):
-            for time_index in range(2):
-                rho_i_j = rho[batch_index, time_index].detach().numpy()
-                lat_obs_i_j = latent_observations[batch_index, time_index].detach().numpy()
-                latent_1_step = np.matmul(lat_obs_i_j, rho_i_j)
-                expected_1_step_recon = np.matmul(latent_1_step, recon_layer.T).reshape((15, 15))
-                self.assertTrue(
-                    torch.isclose(
-                        one_step_latent[batch_index, time_index],
-                        torch.from_numpy(latent_1_step)
-                    ).all(),
-                    f"batch_index={batch_index}, time_index={time_index}"
-                )
-                self.assertTrue(
-                    torch.isclose(
-                        one_step_recon[batch_index, time_index],
-                        torch.from_numpy(expected_1_step_recon)
-                    ).all(),
-                    f"batch_index: {batch_index}, time_index: {time_index}"
-                )
+            ho1 = latents[batch_index][0].detach().numpy()
+            recon = np.matmul(ho1, recon_layer.T).reshape((15, 15))
+            self.assertTrue(np.isclose(recon, predicted_observations[batch_index][0].detach().numpy()).all())
 
-    def test_forward_2_t_skip_2(self):
-        hae = HomomorphismAutoencoder(_get_dummy_encoder_1(), _get_dummy_decoder_1(), _get_dummy_phi_1(), (15, 15),
-                                      (15, 15), 10, [3, 1, 2])
-        observations = torch.ones((3, 2, 15, 15), dtype=torch.float)
-        observations[1, 1, 6, 7] = 25.
-        actions = torch.mul(4., _sample_after_phi_1())
-        actions = actions.view(3, 2, 14)
-        for i in range(3):
-            actions[i, :, :] = torch.mul(1. / 2. ** (4 + i), actions[i, :, :])
-        latent_observations, rho, zero_step_recon, one_step_latent, one_step_recon = hae(observations, actions,
-                                                                                         t_skip=2)
-        expected_latent_observations = np.array([
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]],
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96, 9.96]],
-            [[9., 9., 9., 9., 9., 9., 9., 9., 9., 9.], [9., 9., 9., 9., 9., 9., 9., 9., 9., 9.]]
-        ], dtype=np.float32)
-        expected_0_step_recon = np.ones((3, 2, 15, 15), dtype=np.float32) * 90. / 25.
-        expected_0_step_recon[1, 1] = np.ones((15, 15), dtype=np.float32) * 99.6 / 25.
-        self.assertTrue(torch.isclose(latent_observations, torch.from_numpy(expected_latent_observations)).all())
-        self.assertTrue(torch.isclose(zero_step_recon, torch.from_numpy(expected_0_step_recon)).all())
-        self.assertEqual(rho.shape, (3, 2, 10, 10))
-        self.assertEqual(one_step_latent.shape, (3, 1, 10))
-        self.assertEqual(one_step_recon.shape, (3, 1, 15, 15))
+            rho1 = rho[batch_index][0].detach().numpy()
+            ho2_hat = np.matmul(ho1, rho1)
+            recon = np.matmul(ho2_hat, recon_layer.T).reshape((15, 15))
+            self.assertTrue(np.isclose(recon, predicted_observations[batch_index][1].detach().numpy()).all())
 
-        recon_layer = np.ones((15 * 15, 10), dtype=np.float32) / 25.
-        for batch_index in range(3):
-            combined_rho = np.matmul(rho[batch_index, 0].detach().numpy(), rho[batch_index, 1].detach().numpy())
-            lat_obs_i_j = latent_observations[batch_index, 0].detach().numpy()
-            latent_1_step = np.matmul(lat_obs_i_j, combined_rho)
-            expected_1_step_recon = np.matmul(latent_1_step, recon_layer.T).reshape((15, 15))
-            self.assertTrue(
-                torch.isclose(
-                    one_step_latent[batch_index, 0],
-                    torch.from_numpy(latent_1_step)
-                ).all(),
-                f"batch_index={batch_index}"
-            )
-            self.assertTrue(
-                torch.isclose(
-                    one_step_recon[batch_index, 0],
-                    torch.from_numpy(expected_1_step_recon)
-                ).all(),
-                f"batch_index: {batch_index}, time_index: {0}"
-            )
+            rho2 = rho[batch_index][1].detach().numpy()
+            ho3_hat = np.matmul(ho2_hat, rho2)
+            recon = np.matmul(ho3_hat, recon_layer.T).reshape((15, 15))
+            self.assertTrue(np.isclose(recon, predicted_observations[batch_index][2].detach().numpy()).all())
 
 
 class TestLossFunctions(TestCase):
-    def test_latent_prediction_loss_1(self):
-        nbr_entries = 60
-        true_latents = torch.arange(nbr_entries, dtype=torch.float).view(3, 2, 10)
-        pred_latents = torch.arange(nbr_entries, dtype=torch.float)
-        pred_latents[10] = 70.
-        pred_latents[49] = 109.
-        pred_latents = pred_latents.view(3, 2, 10)
-        loss = latent_prediction_loss(pred_latents, true_latents, t_skip=0)
-        self.assertEqual(loss, (60.**2 + 60**2) / nbr_entries)
-
-    def test_latent_prediction_loss_2(self):
-        true_latents = torch.arange(60, dtype=torch.float).view(3, 2, 10)
-        pred_latents = torch.arange(60, dtype=torch.float)
-        pred_latents[10] = 70.
-        pred_latents[59] = 119.
-        pred_latents = pred_latents.view(3, 2, 10)
-        pred_latents = pred_latents[:, 1:, :]
-        loss = latent_prediction_loss(pred_latents, true_latents, t_skip=1)
-        self.assertEqual(loss, (60.**2 + 60**2) / 30)
-
-    def test_reconstruction_loss_1(self):
-        observations = np.random.random((3, 2, 15, 20, 3))
-        reconstructions = np.random.random((3, 2, 15, 20, 3))
-        loss = reconstruction_loss(torch.from_numpy(reconstructions), torch.from_numpy(observations), t_skip=0)
-        expected_loss = np.mean((observations - reconstructions) ** 2)
-        self.assertTrue(torch.abs(loss - expected_loss) < 1e-6)
-
-    def test_reconstruction_loss_2(self):
-        observations = np.random.random((3, 2, 15, 20, 3))
-        reconstructions = np.random.random((3, 1, 15, 20, 3))
-        loss = reconstruction_loss(torch.from_numpy(reconstructions), torch.from_numpy(observations), t_skip=1)
-        expected_loss = np.mean((observations[:, 1:] - reconstructions) ** 2)
-        self.assertTrue(torch.abs(loss - expected_loss) < 1e-6)
-
     def test_hae_loss_1(self):
-        observations = np.random.random((4, 3, 15, 20, 3))
-        zero_time_step_recon = np.random.random((4, 3, 15, 20, 3))
-        t_time_step_recon = np.random.random((4, 1, 15, 20, 3))
-        encoded_observations = np.random.random((4, 3, 10))
-        t_time_step_latent = np.random.random((4, 1, 10))
+        observations = np.random.random((4, 3, 3, 15, 20))
+        latents = np.random.random((4, 3, 10))
+        predicted_latents = np.random.random((4, 3, 10))
+        predicted_observations = np.random.random((4, 3, 3, 15, 20))
         gamma = 300.
         loss, _, _ = hae_loss(
-            torch.from_numpy(observations), torch.from_numpy(encoded_observations),
-            torch.from_numpy(zero_time_step_recon), torch.from_numpy(t_time_step_recon),
-            torch.from_numpy(t_time_step_latent), t_skip=2, gamma=gamma
+            torch.from_numpy(observations), torch.from_numpy(latents),
+            torch.from_numpy(predicted_latents), torch.from_numpy(predicted_observations),
+            gamma=gamma
         )
 
-        pred_loss = np.mean((encoded_observations[:, 2:] - t_time_step_latent) ** 2)
+        pred_loss = np.mean((latents[:, 1:] - predicted_latents[:, 1:]) ** 2)
         weighted_pred_loss = gamma * pred_loss
-        full_true_obs = np.concatenate([observations, observations[:, 2:]], axis=1)
-        full_recon_obs = np.concatenate([zero_time_step_recon, t_time_step_recon], axis=1)
-        recon_loss = np.mean((full_true_obs - full_recon_obs) ** 2)
+        recon_loss = np.mean((observations - predicted_observations) ** 2)
 
         expected_loss = weighted_pred_loss + recon_loss
 
-        self.assertTrue(torch.abs(loss - expected_loss) < 1e-6), f"{loss} != {expected_loss}"
+        self.assertTrue(torch.abs(loss - expected_loss) < 1e-6, msg=f"{loss} != {expected_loss}")

@@ -48,7 +48,7 @@ def main():
     nbr_epochs = 15
     show_plots = True
     for epoch in range(nbr_epochs):
-        print(f"Epoch {epoch+1}/{nbr_epochs}")
+        print(f"Epoch {epoch + 1}/{nbr_epochs}")
         total_loss = 0
         total_pred_loss = 0
         total_recon_loss = 0
@@ -56,16 +56,18 @@ def main():
             obs = obs.to(device)
             acts = acts.to(device)
             optimizer.zero_grad()
-            latent_obs, rho, recon_0_steps, latent_t_steps, recon_t_steps = hae(obs.unsqueeze(2), acts)
-            loss, recon_loss, weighted_pred_loss = \
-                hae_loss(
-                    obs, latent_obs, recon_0_steps, recon_t_steps, latent_t_steps, t_skip=1, gamma=gamma
-                )
+
+            latents, rho, predicted_latents, predicted_observations = hae(obs.unsqueeze(2), acts)
+            loss, recon_loss, weighted_pred_loss = hae_loss(
+                obs, latents, predicted_latents, predicted_observations, gamma=gamma
+            )
             loss.backward()
             optimizer.step()
+
             total_loss += loss.item()
             total_pred_loss += weighted_pred_loss.item()
             total_recon_loss += recon_loss.item()
+
             if batch_idx % 10 == 0 and batch_idx > 0:
                 print(f"Loss: {total_loss} (recon {total_recon_loss} + pred {total_pred_loss})")
                 total_loss = 0
@@ -73,13 +75,13 @@ def main():
                 total_recon_loss = 0
 
         if show_plots:
-            plot_examples(obs, recon_0_steps, recon_t_steps)
+            plot_examples(obs, predicted_observations)
 
 
-def plot_examples(obs, recon_0_steps, recon_t_steps):
+def plot_examples(obs, predicted_observations):
     o_0, o_1 = obs[0, 0].cpu().detach().numpy(), obs[0, 1].cpu().detach().numpy()
-    recon_direct = recon_0_steps[0, 0].cpu().detach().numpy()
-    recon_indirect = recon_t_steps[0, 0].cpu().detach().numpy()
+    recon_direct = predicted_observations[0, 0].cpu().detach().numpy()
+    recon_indirect = predicted_observations[0, 1].cpu().detach().numpy()
     fig, axs = plt.subplots(2, 2)
     axs[0, 0].imshow(o_0)
     axs[0, 0].set_title("o_0")
@@ -89,6 +91,8 @@ def plot_examples(obs, recon_0_steps, recon_t_steps):
     axs[1, 0].set_title("o_1")
     axs[1, 1].imshow(recon_indirect)
     axs[1, 1].set_title("decoder(encoder(o_0) * phi(g_0))")
+    # make sure that the plots are not cut off
+    plt.tight_layout()
     plt.show()
 
 

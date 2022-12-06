@@ -85,9 +85,9 @@ def main():
             acts = acts.to(device)
             optimizer.zero_grad()
 
-            latent_obs, rho, recon_0_steps, latent_t_steps, recon_t_steps = hae(obs.unsqueeze(2), acts)
+            latents, rho, predicted_latents, predicted_observations = hae(obs.unsqueeze(2), acts)
             loss, recon_loss, weighted_pred_loss = hae_loss(
-                obs, latent_obs, recon_0_steps, recon_t_steps, latent_t_steps, t_skip=1, gamma=gamma
+                obs, latents, predicted_latents, predicted_observations, gamma=gamma
             )
             loss.backward()
             optimizer.step()
@@ -103,13 +103,13 @@ def main():
                 total_recon_loss = 0
 
         if show_plots:
-            plot_examples(obs, recon_0_steps, recon_t_steps)
+            plot_examples(obs, predicted_observations)
 
 
-def plot_examples(obs, recon_0_steps, recon_t_steps):
+def plot_examples(obs, predicted_observations):
     o_0, o_1 = obs[0, 0].cpu().detach().numpy(), obs[0, 1].cpu().detach().numpy()
-    recon_direct = recon_0_steps[0, 0].cpu().detach().numpy()
-    recon_indirect = recon_t_steps[0, 0].cpu().detach().numpy()
+    recon_direct = predicted_observations[0, 0].cpu().detach().numpy()
+    recon_indirect = predicted_observations[0, 1].cpu().detach().numpy()
     fig, axs = plt.subplots(2, 2)
     axs[0, 0].imshow(o_0)
     axs[0, 0].set_title("o_0")
