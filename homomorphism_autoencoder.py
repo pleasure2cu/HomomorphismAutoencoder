@@ -42,10 +42,6 @@ class HomomorphismAutoencoder(torch.nn.Module):
         :param encoder: this network has to output a vector of size latent_space_dimensionality
         :param decoder: this network has to take a vector of size latent_space_dimensionality as input
         :param phi_network: this network gets as input the vector parameterizing all the actions g_t.
-                IMPORTANT: currently it is the responsibility of this network to keep the different parameters apart.
-                    I.e. if for example phi takes the spatial shifts and the rotations as input, it has to make sure
-                    that phi consists of two subnetworks - one for the spatial shifts and one for the rotations.
-                    The output vector of phi is then the concatenation of the outputs of these two subnetworks.
         :param encoder_input_shape: used so that the HAE can take any shape of observations as input
         :param decoder_output_shape: used so that the HAE can output any shape of observations
         :param latent_space_dimensionality: size of the latent space
