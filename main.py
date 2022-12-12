@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import matplotlib.pyplot as plt
 
@@ -13,24 +12,17 @@ def main():
 
     grid_size = 12
     latent_dim = 4
-    nbr_samples = 100
-    gamma = 0.0
-    nbr_epochs = 2
+    nbr_samples = 10_000
+    gamma = 4.0
+    nbr_epochs = 100
     show_plots = True
-    batch_size = 64
+    batch_size = 128
     # set up data
     observations, actions = get_move_square_dataset(square_size=3, grid_size=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
-    # observations, actions = get_u_rotation_dataset(u_side_length=6, grid_side_length=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
-    # observations = np.repeat(observations, 1000, axis=0)
-    # actions = np.repeat(actions, 1000, axis=0)
     dataset = torch.utils.data.TensorDataset(torch.from_numpy(observations), torch.from_numpy(actions))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # set up model
-    # encoder = SmallDenseEncoder([grid_size ** 2, 128, 128, 128, 64, 32, 16, latent_dim])
-    # decoder = SmallDenseDecoder([latent_dim, 16, 32, 64, 128, 128, 128, grid_size ** 2], (grid_size, grid_size))
-    phi = SmallDensePhi([2, 128, 128, 128, 8])
-    # hae = HomomorphismAutoencoder(encoder, decoder, phi, (grid_size, grid_size), (grid_size, grid_size), latent_dim, [2])
     encoder = SmallConvEncoder(
         nbr_channels_start=1, kernel_sizes=[3, 3, 3, 3], channels=[64, 64, 64, 64], strides=[1, 1, 1, 1],
         dense_widths=[4*4*64, 512, latent_dim]
@@ -43,6 +35,7 @@ def main():
         shape_after_dense=(64, 4, 4), remove_channel_at_end=True
     )
     summary(decoder, (latent_dim,), device='cpu')
+    phi = SmallDensePhi([2, 128, 128, 128, 8])
     hae = HomomorphismAutoencoder(encoder, decoder, phi, (1, grid_size, grid_size), (grid_size, grid_size), latent_dim, [2, 2])
     hae.to(device)
 
