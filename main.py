@@ -11,42 +11,45 @@ from torchsummary import summary
 def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    grid_size = 8
-    latent_dim = 2
-    nbr_samples = 1
+    grid_size = 12
+    latent_dim = 4
+    nbr_samples = 100
+    gamma = 0.0
+    nbr_epochs = 2
+    show_plots = True
+    batch_size = 64
     # set up data
-    #observations, actions = get_move_square_dataset(square_size=2, grid_size=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
-    observations, actions = get_u_rotation_dataset(u_side_length=6, grid_side_length=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
-    observations = np.repeat(observations, 1000, axis=0)
-    actions = np.repeat(actions, 1000, axis=0)
+    observations, actions = get_move_square_dataset(square_size=3, grid_size=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
+    # observations, actions = get_u_rotation_dataset(u_side_length=6, grid_side_length=grid_size, nbr_steps=1, nbr_samples=nbr_samples)
+    # observations = np.repeat(observations, 1000, axis=0)
+    # actions = np.repeat(actions, 1000, axis=0)
     dataset = torch.utils.data.TensorDataset(torch.from_numpy(observations), torch.from_numpy(actions))
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
     # set up model
     # encoder = SmallDenseEncoder([grid_size ** 2, 128, 128, 128, 64, 32, 16, latent_dim])
     # decoder = SmallDenseDecoder([latent_dim, 16, 32, 64, 128, 128, 128, grid_size ** 2], (grid_size, grid_size))
-    phi = SmallDensePhi([1, 32, 32, 4])
+    phi = SmallDensePhi([2, 128, 128, 128, 8])
     # hae = HomomorphismAutoencoder(encoder, decoder, phi, (grid_size, grid_size), (grid_size, grid_size), latent_dim, [2])
     encoder = SmallConvEncoder(
-        nbr_channels_start=1, kernel_sizes=[3, 3], channels=[16, 32], strides=[1, 1],
-        dense_widths=[4*4*32, 128, latent_dim]
+        nbr_channels_start=1, kernel_sizes=[3, 3, 3, 3], channels=[64, 64, 64, 64], strides=[1, 1, 1, 1],
+        dense_widths=[4*4*64, 512, latent_dim]
     )
-    summary(encoder, (1, grid_size, grid_size))
+    summary(encoder, (1, grid_size, grid_size), device='cpu')
     decoder = SmallConvDecoder(
-        kernel_sizes=[3, 3], channels=[16, 1], strides=[1, 1], dense_widths=[latent_dim, 128, 4*4*32],
-        shape_after_dense=(32, 4, 4), remove_channel_at_end=True
+        kernel_sizes_deconv=[3, 3, 3, 3, 3], channels_deconv=[64, 64, 64, 64, 64], strides_deconv=[1, 1, 1, 1, 1],
+        dense_widths=[latent_dim, 128, 4 * 4 * 64],
+        kernel_sizes_conv=[3, 1], channels_conv=[32, 1], strides_conv=[1, 1],
+        shape_after_dense=(64, 4, 4), remove_channel_at_end=True
     )
-    summary(decoder, (latent_dim,))
-    hae = HomomorphismAutoencoder(encoder, decoder, phi, (1, grid_size, grid_size), (grid_size, grid_size), latent_dim, [2])
+    summary(decoder, (latent_dim,), device='cpu')
+    hae = HomomorphismAutoencoder(encoder, decoder, phi, (1, grid_size, grid_size), (grid_size, grid_size), latent_dim, [2, 2])
     hae.to(device)
 
     # get the optimizer
     optimizer = torch.optim.Adam(hae.parameters(), 0.001)
 
     # train model
-    gamma = 0.0
-    nbr_epochs = 15
-    show_plots = True
     for epoch in range(nbr_epochs):
         print(f"Epoch {epoch + 1}/{nbr_epochs}")
         total_loss = 0

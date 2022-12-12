@@ -54,7 +54,7 @@ def main():
     )
     summary(encoder, (1, grid_size, grid_size), device='cpu')  # print a summary of the encoder to the command line
     decoder = SmallConvDecoder(
-        kernel_sizes=[3, 3, 1], channels=[16, 16, 1], strides=[1, 1, 1],  # these values parametrize the transpose conv layers
+        kernel_sizes_deconv=[3, 3, 1], channels_deconv=[16, 16, 1], strides_deconv=[1, 1, 1],  # these values parametrize the transpose conv layers
         dense_widths=[latent_dim, 128, 4*4*32],  # these values parametrize the dense layers before the transpose conv layers
         shape_after_dense=(32, 4, 4),  # this shape is used to reshape the output of the dense layers before the transpose conv layers
         remove_channel_at_end=True  # this is used to remove the channel dimension at the end of the decoder
